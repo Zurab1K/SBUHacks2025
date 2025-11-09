@@ -133,6 +133,10 @@ export const buildCallFromNeuralSeek = async (
     return Array.from(combined)
   }
 
+  const isNeuralSeekSentimentDefault =
+    neuralSeekData.sentiment.label === 'Neutral' &&
+    neuralSeekData.sentiment.score === 0
+
   return {
     ...fallbackRecord,
     summary: neuralSeekData.summary ?? fallbackRecord.summary,
@@ -140,11 +144,15 @@ export const buildCallFromNeuralSeek = async (
     actionItems: neuralSeekData.actionItems ?? fallbackRecord.actionItems,
     objections: neuralSeekData.objections ?? fallbackRecord.objections,
     tags: mergeTags(),
-    sentiment: neuralSeekData.sentiment.label ?? fallbackRecord.sentiment,
-    sentimentScore:
-      typeof neuralSeekData.sentiment.score === 'number'
-        ? neuralSeekData.sentiment.score
-        : fallbackRecord.sentimentScore,
+
+    sentiment: isNeuralSeekSentimentDefault
+      ? fallbackRecord.sentiment
+      : neuralSeekData.sentiment.label,
+      
+    sentimentScore: isNeuralSeekSentimentDefault
+      ? fallbackRecord.sentimentScore
+      : neuralSeekData.sentiment.score,
+      
     durationMinutes:
       neuralSeekData.durationMinutes ?? fallbackRecord.durationMinutes,
   }

@@ -20,8 +20,21 @@ export const CallsPage = () => {
       }
     }
     const positiveCalls = calls.filter((call) => call.sentiment === 'Positive')
-    const averageScore =
-      calls.reduce((acc, call) => acc + call.sentimentScore, 0) / calls.length
+    
+    const { totalScore, totalWeight } = calls.reduce(
+      (acc, call) => {
+        const weight = call.durationMinutes ?? 1 
+        return {
+          totalScore: acc.totalScore + call.sentimentScore * weight,
+          totalWeight: acc.totalWeight + weight,
+        }
+      },
+      { totalScore: 0, totalWeight: 0 }
+    )
+  
+    const averageScore = totalWeight > 0 ? totalScore / totalWeight : 0
+    
+
     const objections = calls.reduce(
       (acc, call) => acc + (call.objections?.length ?? 0),
       0,
