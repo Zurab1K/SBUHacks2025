@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import { PageHeader } from '../components/common/PageHeader'
 import {
   isFinancialAgentConfigured,
   runFinancialHealthAgent,
+  buildMockFinancialReport,
   type FinancialHealthInput,
   type FinancialHealthReport,
 } from '../utils/neuralseek'
+import { spreadsheetToJsonString } from '../utils/excel'
 
 const emptyForm: FinancialHealthInput = {
   companyName: '',
@@ -15,6 +17,26 @@ const emptyForm: FinancialHealthInput = {
   incomeStatement: '',
   cashflowStatement: '',
 }
+
+const statementFields = [
+  {
+    field: 'balanceSheet',
+    label: 'Balance sheet workbook',
+    helper: 'Upload the Excel export that lists assets, liabilities, and equity.',
+  },
+  {
+    field: 'incomeStatement',
+    label: 'Income statement workbook',
+    helper: 'Upload the Excel P&L export for the selected period.',
+  },
+  {
+    field: 'cashflowStatement',
+    label: 'Cash flow statement workbook',
+    helper: 'Upload the Excel export with operating, investing, and financing sections.',
+  },
+] as const
+
+type StatementField = (typeof statementFields)[number]['field']
 
 const statusStyles: Record<string, string> = {
   Strong: 'bg-emerald-50 text-emerald-700 border-emerald-100',
@@ -29,11 +51,61 @@ export const FinancialHealthPage = () => {
   const [report, setReport] = useState<FinancialHealthReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<Record<StatementField, string | null>>({
+    balanceSheet: null,
+    incomeStatement: null,
+    cashflowStatement: null,
+  })
 
   const agentConfigured = useMemo(() => isFinancialAgentConfigured(), [])
 
   const updateField = (field: keyof FinancialHealthInput, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const clearStatement = (field: StatementField) => {
+    setUploadedFiles((prev) => ({ ...prev, [field]: null }))
+    updateField(field, '')
+  }
+
+  const handleSpreadsheetUpload = async (
+    field: StatementField,
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      clearStatement(field)
+      return
+    }
+
+    const lowerName = file.name.toLowerCase()
+    const isSpreadsheet =
+      file.type ===
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.type === 'application/vnd.ms-excel' ||
+      lowerName.endsWith('.xlsx') ||
+      lowerName.endsWith('.xls') ||
+      lowerName.endsWith('.csv')
+
+    if (!isSpreadsheet) {
+      setError('Upload Excel exports (.xlsx or .xls) from your finance system.')
+      event.target.value = ''
+      return
+    }
+
+    try {
+      const jsonString = await spreadsheetToJsonString(file)
+      updateField(field, jsonString)
+      setUploadedFiles((prev) => ({ ...prev, [field]: file.name }))
+      setError(null)
+    } catch (err) {
+      console.error(err)
+      clearStatement(field)
+      setError('We could not parse that spreadsheet. Export a clean .xlsx and re-upload.')
+    } finally {
+      event.target.value = ''
+    }
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -45,28 +117,23 @@ export const FinancialHealthPage = () => {
       return
     }
 
-    if (
-      !form.balanceSheet.trim() ||
-      !form.incomeStatement.trim() ||
-      !form.cashflowStatement.trim()
-    ) {
-      setError('Paste the balance sheet, income statement, and cash flow statement.')
-      return
-    }
-
-    if (!agentConfigured) {
-      setError('NeuralSeek Financial agent is not configured yet.')
+    if (!form.balanceSheet || !form.incomeStatement || !form.cashflowStatement) {
+      setError('Upload the balance sheet, income statement, and cash flow Excel workbooks.')
       return
     }
 
     try {
       setIsLoading(true)
-      const result = await runFinancialHealthAgent(form)
+      const result = agentConfigured
+        ? await runFinancialHealthAgent(form)
+        : buildMockFinancialReport(form)
       setReport(result)
     } catch (err) {
       console.error(err)
       setError(
-        'NeuralSeek could not score your financials. Double-check the .env values and try again.',
+        agentConfigured
+          ? 'NeuralSeek could not score your financials. Double-check the .env values and try again.'
+          : 'We could not derive a mock score from the converted Excel statements. Clean up the data and retry.',
       )
     } finally {
       setIsLoading(false)
@@ -92,12 +159,13 @@ export const FinancialHealthPage = () => {
     <div className="space-y-6">
       <PageHeader
         title="Financial health snapshot"
-        subtitle="Drop in your core financial statements and let NeuralSeek summarize runway, strengths, and risks."
+        subtitle="Upload the Excel exports for your balance sheet, income statement, and cash flow. We convert them to JSON for NeuralSeek to summarize runway, strengths, and risks."
       />
 
       {!agentConfigured && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Set `VITE_NEURALSEEK_FIN_AGENT` in your `.env` to enable this workflow.
+          NeuralSeek isn&apos;t connected yet—set `VITE_NEURALSEEK_FIN_AGENT` plus the base URL and API
+          key in `.env`. We&apos;ll use a local heuristic model until those credentials are ready.
         </div>
       )}
 
@@ -126,23 +194,54 @@ export const FinancialHealthPage = () => {
             </label>
           </div>
 
-          {(
-            [
-              ['balanceSheet', 'Balance sheet (assets, liabilities, equity)'],
-              ['incomeStatement', 'Income statement / P&L'],
-              ['cashflowStatement', 'Cash flow statement'],
-            ] as const
-          ).map(([field, label]) => (
-            <label key={field} className="mt-4 block text-sm font-semibold text-slate-600">
-              {label}
-              <textarea
-                value={form[field]}
-                onChange={(event) => updateField(field, event.target.value)}
-                className="mt-2 h-40 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                placeholder="Paste the statement or summarized figures"
-              />
-            </label>
-          ))}
+          <div className="mt-2 space-y-4">
+            {statementFields.map(({ field, label, helper }) => (
+              <div key={field} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-700">{label}</p>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          uploadedFiles[field]
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        <span
+                          className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${
+                            uploadedFiles[field] ? 'bg-emerald-500' : 'bg-slate-400'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        {uploadedFiles[field] ? 'Uploaded' : 'Awaiting file'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">{helper}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => clearStatement(field)}
+                    disabled={!uploadedFiles[field]}
+                    className="text-xs font-semibold text-slate-400 transition hover:text-rose-500 disabled:cursor-not-allowed disabled:text-slate-300"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                  onChange={(event) => void handleSpreadsheetUpload(field, event)}
+                  className="mt-3 block w-full cursor-pointer rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600 file:mr-4 file:cursor-pointer file:rounded-full file:border-0 file:bg-slate-900 file:px-5 file:py-2 file:text-sm file:font-semibold file:text-white"
+                />
+                <p className="mt-2 text-xs text-slate-500">
+                  {uploadedFiles[field]
+                    ? `Loaded ${uploadedFiles[field]}.`
+                    : 'No file selected yet.'}
+                </p>
+              </div>
+            ))}
+          </div>
 
           {error && <p className="mt-4 text-sm text-rose-500">{error}</p>}
 
