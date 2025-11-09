@@ -4,7 +4,7 @@ Production-ready React + Vite experience for “Auto Notes to Sheets,” a tool 
 
 ## Features
 
-- **Transcript ingestion** – Upload files or paste raw transcript text, capture call metadata, and kick off AI processing.
+- **Audio & Transcript Ingestion** – Upload audio recordings (MP3, WAV, M4A) or paste raw transcript text. Audio is automatically transcribed via AssemblyAI before AI processing.
 - **AI notes dashboard** – See every processed call in an interactive table with summaries, next steps, sentiment, and objection tracking.
 - **Detail view** – Inspect individual calls with executive summaries, action items, tags, and metadata.
 - **Sheets settings** – Manage Google Sheet destinations, auto-sync cadence, and integration health checks.
@@ -15,6 +15,8 @@ Production-ready React + Vite experience for “Auto Notes to Sheets,” a tool 
 - React 18 + TypeScript + Vite
 - React Router for client-side routing
 - Tailwind CSS for responsive UI
+- AssemblyAI for Speech-to-text
+- NeuralSeek for AI Analysis and summarization
 
 ## Getting started
 
@@ -38,6 +40,7 @@ The upload flow can call your NeuralSeek mAIstro agent directly. Provide the end
 ```bash
 cp .env.example .env
 # then edit the values:
+# VITE_ASSEMBLYAI_API_KEY=your_assemblyai_api_key_here
 # VITE_NEURALSEEK_BASE_URL=https://stagingapi.neuralseek.com/v1/<instance>
 # VITE_NEURALSEEK_AGENT=<Agent_Name>
 # VITE_NEURALSEEK_API_KEY=<Bearer token from Integrate > API Keys>
