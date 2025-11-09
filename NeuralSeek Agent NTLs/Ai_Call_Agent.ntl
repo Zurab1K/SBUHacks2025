@@ -1,0 +1,12 @@
+<< name: callTranscript, prompt: true, desc: "Raw transcript from a sales or customer success call" >>
+{{ LLM  | prompt: "Summarize the key discussion points and decisions from the following call transcript:\n<< name: callTranscript >>" }}=>{{ variable  | name: "summary" }}
+{{ LLM  | prompt: "Highlight the action items, next steps, and follow-ups from the following call transcript:\n<< name: callTranscript >>" }}=>{{ variable  | name: "actionItems" }}
+{{ LLM  | prompt: "Detect the customer sentiment, tone, and any objections from the following call transcript:\n<< name: callTranscript >>" }}=>{{ variable  | name: "sentimentAnalysis" }}
+Call Summary:
+<< name: summary, prompt: false >>
+
+Action Items and Next Steps:
+<< name: actionItems, prompt: false >>
+
+Customer Sentiment and Objections:
+<< name: sentimentAnalysis, prompt: false >>
