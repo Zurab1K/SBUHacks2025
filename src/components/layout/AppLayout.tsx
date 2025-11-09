@@ -33,13 +33,15 @@ export const AppLayout = () => {
     <div className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-brand-500">
-              Auto Notes to Sheets
-            </p>
-            <h1 className="text-xl font-semibold text-slate-900">
-              AI Meeting Summarizer Dashboard
-            </h1>
+          <div className="flex items-center gap-3">
+            <img
+              src="/synoptic.png"
+              alt="Synoptic AI logo"
+              className="h-12 w-12 rounded-full object-contain"
+            />
+            <span className="text-2xl font-semibold text-slate-900">
+              Synoptic AI
+            </span>
           </div>
           <div className="flex items-center gap-2"> {}
             {navItems.map((item) => (
