@@ -10,6 +10,49 @@ const metadataDefaults = {
   contact: '',
   owner: '',
 }
+const ASSEMBLYAI_API_KEY = import.meta.env.VITE_ASSEMBLYAI_API_KEY
+
+const transcribeAudioWithApi = async (file: File): Promise<string> => {
+  const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
+    method: 'POST',
+    headers: {
+      authorization: ASSEMBLYAI_API_KEY,
+      'Content-Type': 'application/octet-stream',
+    },
+    body: file,
+  })
+  const uploadData = await uploadResponse.json()
+  const uploadUrl = uploadData.upload_url
+
+  if (!uploadUrl) {
+    throw new Error('Failed to upload audio file to AssemblyAI.')
+  }
+  const transcribeResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+    method: 'POST',
+    headers: {
+      authorization: ASSEMBLYAI_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ audio_url: uploadUrl }),
+  })
+  const transcribeData = await transcribeResponse.json()
+  const transcriptId = transcribeData.id
+
+  while (true) {
+    const pollResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
+      headers: { authorization: ASSEMBLYAI_API_KEY },
+    })
+    const pollData = await pollResponse.json()
+
+    if (pollData.status === 'completed') {
+      return pollData.text
+    }
+    if (pollData.status === 'failed') {
+      throw new Error(`Transcription failed: ${pollData.error}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+  }
+}
 
 export const UploadPage = () => {
   const { processTranscript, isProcessing } = useCalls()
@@ -29,6 +72,47 @@ export const UploadPage = () => {
     event.preventDefault()
     setFeedback(null)
     setError(null)
+    
+    if (mode === 'upload' && selectedFile && selectedFile.type.startsWith('audio/')) {
+      if (!metadata.title) {
+        setError('Give this call a title so you can find it later.')
+        return
+      }
+      
+      try {
+        setFeedback('Uploading and transcribing audio... this may take a moment.');
+
+        const transcript = await transcribeAudioWithApi(selectedFile);
+        
+        if (!transcript) {
+          setError('Transcription failed or returned empty text.');
+          setFeedback(null);
+          return;
+        }
+
+        setFeedback('Audio transcribed. Summarizing notes with AI...');
+        
+        await processTranscript({
+          transcript,
+          metadata: {
+            ...metadata,
+            source: 'upload',
+            sourceName: selectedFile.name,
+          },
+        })
+
+        setFeedback('Transcript processed and added to your dashboard.')
+        setMetadata(metadataDefaults)
+        setTranscriptText('')
+        setSelectedFile(null)
+      } catch (err) {
+        console.error(err)
+        setError(err instanceof Error ? err.message : 'Something went wrong during transcription.')
+        setFeedback(null)
+      }
+      return; 
+    }
+
 
     try {
       let transcript = transcriptText.trim()
@@ -130,11 +214,11 @@ export const UploadPage = () => {
                 <span className="text-brand-600">browse</span>
               </span>
               <p className="text-sm text-slate-500">
-                Supports .txt, .docx, and .vtt. Max 5 MB.
+                Supports .txt, .docx, .vtt., .mp3, .wav and .m4a Max 5 MB.
               </p>
               <input
                 type="file"
-                accept=".txt,.doc,.docx,.vtt"
+                accept=".txt,.doc,.docx,.vtt,.mp3,.wav,.m4a"
                 onChange={handleFile}
                 className="hidden"
               />
