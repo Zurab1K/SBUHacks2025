@@ -1,4 +1,4 @@
-# Auto Notes to Sheets (Frontend)
+# Auto Notes to Sheets 
 
 Production-ready React + Vite experience for “Auto Notes to Sheets,” a tool that converts raw sales or CS call transcripts into structured notes that can be exported to Google Sheets.
 
